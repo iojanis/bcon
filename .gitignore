@@ -7,3 +7,6 @@
 
 bcon_client/target
 bcon_server/target
+
+.idea/
+.claude/
