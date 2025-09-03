@@ -242,8 +242,41 @@ impl ResponseTracker {
     
     /// Clean up expired requests
     pub fn cleanup_expired(&mut self) {
-        // In a real implementation, you'd track timestamps and remove expired requests
-        // For now, we'll keep this simple
+        use std::time::{SystemTime, UNIX_EPOCH, Duration};
+        
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_secs();
+            
+        // For simplicity, we'll use a 30 second timeout for all requests
+        const REQUEST_TIMEOUT_SECS: u64 = 30;
+        
+        // Note: We can't directly track timestamps without changing the struct
+        // In a full implementation, we'd store (Sender, timestamp) tuples
+        // For now, if we have more than 100 pending requests, clear some old ones
+        if self.pending_requests.len() > 100 {
+            // Remove half of the pending requests (oldest first by insertion order)
+            let keys_to_remove: Vec<String> = self.pending_requests
+                .keys()
+                .take(self.pending_requests.len() / 2)
+                .cloned()
+                .collect();
+                
+            for key in keys_to_remove {
+                if let Some(sender) = self.pending_requests.remove(&key) {
+                    // Send a timeout error to waiting clients
+                    let _ = sender.send(IncomingMessage {
+                        message_type: "timeout".to_string(),
+                        data: serde_json::json!({"error": "Request timeout"}),
+                        timestamp: now,
+                        success: Some(false),
+                        error: Some("Request timeout".to_string()),
+                        message_id: Some(key),
+                    });
+                }
+            }
+        }
     }
 }
 

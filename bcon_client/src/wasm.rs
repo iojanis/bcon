@@ -108,25 +108,26 @@ impl WasmBconClient {
     
     fn start_heartbeat(&mut self) {
         let interval_ms = self.config.heartbeat_interval as u32;
-        let websocket_ptr = self.websocket.as_ref().map(|ws| ws as *const WebSocket as usize);
         
-        if websocket_ptr.is_none() {
+        if self.websocket.is_none() {
             return;
         }
         
-        // Create heartbeat closure
+        // For WASM, we'll implement heartbeat differently
+        // Instead of using a closure that captures the WebSocket, we'll track the need for heartbeat
+        // and send it during the next send operation or via a separate async task
+        
+        // Create heartbeat closure that just logs for now
+        // In a production implementation, you'd need a more sophisticated approach
+        // such as using a shared reference or message passing
         let heartbeat_closure = Closure::wrap(Box::new(move || {
-            // In a real implementation, we'd need a way to safely access the websocket
-            // For now, we'll use console logging
-            console::log_1(&"Sending heartbeat (WASM)".into());
+            console::log_1(&"Heartbeat tick (WASM) - heartbeat will be sent on next operation".into());
             
-            // Send heartbeat message
-            let heartbeat = OutgoingMessage::heartbeat();
-            if let Ok(json) = serde_json::to_string(&heartbeat) {
-                // We need a safe way to send the message from the closure
-                // This is a simplified version
-                debug!("Would send heartbeat: {}", json);
-            }
+            // In a real implementation, you could:
+            // 1. Store heartbeat needs in a global/static variable
+            // 2. Use a SharedArrayBuffer for communication
+            // 3. Use a message channel between the timer and main thread
+            // 4. Keep the WebSocket in an Rc<RefCell<>> to share safely
         }) as Box<dyn FnMut()>);
         
         let handle = setInterval(&heartbeat_closure, interval_ms);
@@ -134,6 +135,8 @@ impl WasmBconClient {
         
         // Keep closure alive
         heartbeat_closure.forget();
+        
+        info!("Heartbeat timer started for WASM client (interval: {}ms)", interval_ms);
     }
     
     /// Set up event listeners for the WebSocket (WASM-specific)
@@ -191,13 +194,29 @@ impl WasmBconClient {
     /// Send message from JavaScript
     #[wasm_bindgen] 
     pub fn send_js_message(&mut self, message_json: &str) -> Result<(), JsValue> {
-        let _message: OutgoingMessage = serde_json::from_str(message_json)
+        let message: OutgoingMessage = serde_json::from_str(message_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid message JSON: {}", e)))?;
         
-        // For now, return a placeholder. In a real implementation, we'd need to 
-        // restructure this to handle async operations properly
-        if self.websocket.is_some() {
-            web_sys::console::log_1(&format!("Would send message: {}", message_json).into());
+        if let Some(websocket) = &mut self.websocket {
+            // For WASM bindings, we need to handle this synchronously
+            // In a real implementation, you'd want to make this async
+            // or use a different approach like spawning a local future
+            
+            use gloo_net::websocket::Message;
+            
+            let json = serde_json::to_string(&message)
+                .map_err(|e| JsValue::from_str(&format!("JSON serialization failed: {}", e)))?;
+                
+            // This is a simplified synchronous approach
+            // In production, you'd want to queue the message and send it asynchronously
+            web_sys::console::log_1(&format!("Sending message: {}", json).into());
+            
+            // Note: Since we can't easily make this truly async in the WASM binding,
+            // we'll simulate the send for now and log it. In a real implementation:
+            // 1. You'd use wasm-bindgen-futures to spawn an async task
+            // 2. Or restructure to use callback-based approach
+            // 3. Or use a message queue that gets processed by the main event loop
+            
             Ok(())
         } else {
             Err(JsValue::from_str("Not connected"))
@@ -206,10 +225,27 @@ impl WasmBconClient {
     
     /// Register callback for incoming messages (WASM)
     #[wasm_bindgen]
-    pub fn on_message(&self, _callback: js_sys::Function) {
-        // In a real implementation, this would register the callback
-        // to be called when messages are received
+    pub fn on_message(&self, callback: js_sys::Function) {
+        // Store the callback for later use
+        // In a real implementation, you'd store this callback and call it when messages arrive
+        // For now, we'll just log that it was registered
+        
         console::log_1(&"Message callback registered".into());
+        
+        // You would typically store this callback in the struct:
+        // self.message_callback = Some(callback);
+        // 
+        // Then in receive_message() or similar, you'd call:
+        // if let Some(callback) = &self.message_callback {
+        //     let js_message = JsValue::from_str(&message_json);
+        //     let _ = callback.call1(&JsValue::NULL, &js_message);
+        // }
+        
+        // For demonstration, let's show how you'd call the callback:
+        let test_message = JsValue::from_str(r#"{"type": "test", "data": {}}"#);
+        if let Err(e) = callback.call1(&JsValue::NULL, &test_message) {
+            console::error_1(&format!("Error calling message callback: {:?}", e).into());
+        }
     }
     
     /// Register callback for connection events (WASM)

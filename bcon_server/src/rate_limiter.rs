@@ -307,6 +307,27 @@ impl RateLimiter {
         self.error_count.store(0, Ordering::Relaxed);
     }
 
+    /// Record a failed authentication attempt for an IP address
+    pub async fn record_failed_auth(&self, ip: &str) -> Result<()> {
+        use crate::auth::ClientRole;
+        
+        // Use the existing rate limiting mechanism to track failed auth attempts
+        // This will automatically handle banning after too many failures
+        let result = self.check_rate_limit(
+            ip,
+            &ClientRole::Guest, // Use guest role for failed auth attempts
+            "auth_fail",
+            1, // Each failed auth attempt costs 1
+        ).await?;
+        
+        if !result.is_allowed() {
+            // IP will be automatically banned by the rate limit system
+            debug!("Auth failure recorded for IP {}, potential ban triggered", ip);
+        }
+        
+        Ok(())
+    }
+
     pub async fn get_rate_limit_info(&self, ip: &str, context: &str) -> Result<Option<RateLimitInfo>> {
         let key = self.get_rate_limit_key(ip, context);
         
