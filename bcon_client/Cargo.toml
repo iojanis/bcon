@@ -1,0 +1,72 @@
+[package]
+name = "bcon_client"
+version = "0.1.0"
+edition = "2021"
+authors = ["Bcon Team"]
+description = "WebSocket client library for Bcon server communication - supports native, Node.js, Deno, and browser environments"
+license = "MIT"
+repository = "https://github.com/your-repo/bcon"
+documentation = "https://docs.rs/bcon_client"
+
+[lib]
+name = "bcon_client"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "bcon_client"
+path = "src/bin/main.rs"
+
+[features]
+default = ["native", "cli"]
+native = ["tokio", "tokio-tungstenite", "native-tls"]
+wasm = ["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys", "gloo-net"]
+cli = ["clap", "tracing-subscriber"]
+
+[dependencies]
+# Core dependencies (always included)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde", "js"] }
+thiserror = "1.0"
+tracing = "0.1"
+futures-util = { version = "0.3", features = ["sink"] }
+url = "2.5"
+getrandom = { version = "0.2", features = ["js"] }
+
+# Native dependencies
+tokio = { version = "1.0", features = ["full"], optional = true }
+tokio-tungstenite = { version = "0.20", features = ["native-tls"], optional = true }
+native-tls = { version = "0.2", optional = true }
+clap = { version = "4.0", features = ["derive"], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+
+# WASM dependencies
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+gloo-net = { version = "0.4", features = ["websocket"], optional = true }
+
+[dependencies.web-sys]
+version = "0.3"
+optional = true
+features = [
+  "console",
+  "Window",
+  "Document",
+  "WebSocket",
+  "MessageEvent",
+  "ErrorEvent",
+  "CloseEvent",
+  "BinaryType",
+  "Blob",
+  "FileReader",
+  "ProgressEvent",
+]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+wasm-logger = "0.2"
+
+[package.metadata.wasm-pack.profile.release]
+wee-alloc = false
+wasm-opt = false

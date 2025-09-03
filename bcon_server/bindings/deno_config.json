@@ -1,0 +1,29 @@
+{
+  "adapter_port": 8086,
+  "client_port": 8085,
+  "adapter_secret": "adapter_test_secret_32_chars_minimum_length_required_here",
+  "client_secret": "client_test_secret_32_chars_minimum_length_required_here",
+  "rate_limits": {
+    "guest_requests_per_minute": 30,
+    "player_requests_per_minute": 120,
+    "admin_requests_per_minute": 300,
+    "system_requests_per_minute": 1000,
+    "unauthenticated_adapter_attempts_per_minute": 5,
+    "window_duration_seconds": 60,
+    "ban_threshold": 100,
+    "ban_duration_hours": 24
+  },
+  "allowed_origins": [
+    "http://localhost:3000",
+    "https://yourserver.com"
+  ],
+  "heartbeat_interval_seconds": 30,
+  "connection_timeout_seconds": 300,
+  "log_level": "info",
+  "server_info": {
+    "name": "Bcon Server (Deno)",
+    "description": "Deno wrapped Bcon server",
+    "url": "localhost",
+    "minecraft_version": "1.20.4"
+  }
+}

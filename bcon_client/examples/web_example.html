@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bcon Client - Web Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 80vh;
+        }
+        .panel {
+            background-color: #2d2d30;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #3e3e42;
+        }
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .input-group label {
+            font-weight: bold;
+            color: #cccccc;
+        }
+        .input-group input, .input-group select, .input-group textarea {
+            padding: 8px;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .btn-primary {
+            background-color: #007acc;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #005a9e;
+        }
+        .btn-secondary {
+            background-color: #68217a;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #5a1c69;
+        }
+        .btn-danger {
+            background-color: #d73a49;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #b32d3a;
+        }
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #1e7e34;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .status.disconnected {
+            background-color: #d73a49;
+        }
+        .status.connected {
+            background-color: #28a745;
+        }
+        .status.connecting {
+            background-color: #ffc107;
+            color: #000;
+        }
+        .log-panel {
+            display: flex;
+            flex-direction: column;
+        }
+        .log-area {
+            flex: 1;
+            background-color: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .stats {
+            background-color: #252526;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007acc;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #cccccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 Bcon Client - Web Example</h1>
+    <p>Connect to a Bcon server directly from your web browser using WASM.</p>
+    
+    <div class="container">
+        <div class="panel control-panel">
+            <h3>Connection Control</h3>
+            
+            <div id="status" class="status disconnected">
+                Disconnected
+            </div>
+            
+            <div class="input-group">
+                <label for="serverUrl">Server URL:</label>
+                <input type="text" id="serverUrl" value="ws://localhost:8081" />
+            </div>
+            
+            <div class="input-group">
+                <label for="clientRole">Client Role:</label>
+                <select id="clientRole">
+                    <option value="guest">Guest</option>
+                    <option value="player">Player</option>
+                    <option value="admin">Admin</option>
+                    <option value="system">System</option>
+                </select>
+            </div>
+            
+            <div class="input-group" id="tokenGroup" style="display: none;">
+                <label for="token">Token:</label>
+                <input type="password" id="token" placeholder="JWT token" />
+            </div>
+            
+            
+            <div class="button-group">
+                <button id="connectBtn" class="btn-primary">Connect</button>
+                <button id="disconnectBtn" class="btn-danger" disabled>Disconnect</button>
+            </div>
+            
+            <hr style="border-color: #3e3e42;">
+            
+            <h4>Send Message</h4>
+            <div class="input-group">
+                <label for="eventType">Event Type:</label>
+                <input type="text" id="eventType" placeholder="e.g., send_chat, heartbeat" />
+            </div>
+            
+            <div class="input-group">
+                <label for="messageData">Message Data (JSON):</label>
+                <textarea id="messageData" rows="4" placeholder='{"message": "Hello world!"}'></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button id="sendBtn" class="btn-secondary" disabled>Send Message</button>
+                <button id="heartbeatBtn" class="btn-success" disabled>Send Heartbeat</button>
+                <button id="serverInfoBtn" class="btn-success" disabled>Get Server Info</button>
+            </div>
+            
+            <div class="stats">
+                <h4>Statistics</h4>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div id="sentCount" class="stat-value">0</div>
+                        <div class="stat-label">Sent</div>
+                    </div>
+                    <div class="stat-item">
+                        <div id="receivedCount" class="stat-value">0</div>
+                        <div class="stat-label">Received</div>
+                    </div>
+                    <div class="stat-item">
+                        <div id="errorCount" class="stat-value">0</div>
+                        <div class="stat-label">Errors</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel log-panel">
+            <h3>Message Log</h3>
+            <div id="logArea" class="log-area"></div>
+            <div class="log-controls">
+                <button id="clearLogBtn" class="btn-secondary">Clear Log</button>
+                <button id="exportLogBtn" class="btn-secondary">Export Log</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the WASM module
+        // To use this, first build the WASM module: wasm-pack build --target web --out-dir pkg
+        // Then serve this HTML file from a web server (due to CORS restrictions)
+        
+        let wasmModule = null;
+        let client = null;
+        let stats = { sent: 0, received: 0, errors: 0 };
+        
+        // UI Elements
+        const elements = {
+            status: document.getElementById('status'),
+            serverUrl: document.getElementById('serverUrl'),
+            clientRole: document.getElementById('clientRole'),
+            token: document.getElementById('token'),
+            tokenGroup: document.getElementById('tokenGroup'),
+            connectBtn: document.getElementById('connectBtn'),
+            disconnectBtn: document.getElementById('disconnectBtn'),
+            eventType: document.getElementById('eventType'),
+            messageData: document.getElementById('messageData'),
+            sendBtn: document.getElementById('sendBtn'),
+            heartbeatBtn: document.getElementById('heartbeatBtn'),
+            serverInfoBtn: document.getElementById('serverInfoBtn'),
+            logArea: document.getElementById('logArea'),
+            clearLogBtn: document.getElementById('clearLogBtn'),
+            exportLogBtn: document.getElementById('exportLogBtn'),
+            sentCount: document.getElementById('sentCount'),
+            receivedCount: document.getElementById('receivedCount'),
+            errorCount: document.getElementById('errorCount'),
+        };
+        
+        // Try to load the WASM module
+        async function initWasm() {
+            try {
+                // Import the generated WASM module
+                const wasm = await import('../pkg/bcon_client.js');
+                await wasm.default(); // Initialize the WASM module
+                wasmModule = wasm;
+                logMessage('🚀', 'WASM module loaded successfully');
+                logMessage('📦', 'Available exports: ' + Object.keys(wasm).join(', '));
+                return true;
+            } catch (error) {
+                logMessage('⚠️', 'Failed to load WASM module. Using fallback WebSocket implementation.');
+                logMessage('💡', 'To enable WASM: run "wasm-pack build --target web --out-dir pkg --no-default-features --features wasm" in the bcon_client directory');
+                console.error('WASM load error:', error);
+                return false;
+            }
+        }
+        
+        // Role change handler
+        elements.clientRole.addEventListener('change', (e) => {
+            const role = e.target.value;
+            elements.tokenGroup.style.display = (role !== 'guest') ? 'block' : 'none';
+        });
+        
+        // Fallback WebSocket client when WASM is not available
+        class FallbackBconClient {
+            constructor(config) {
+                this.config = config;
+                this.connected = false;
+                this.websocket = null;
+            }
+            
+            async connect() {
+                updateStatus('connecting', 'Connecting...');
+                logMessage('📡', 'Connecting to ' + this.config.server_url + ' (Fallback mode)');
+                
+                try {
+                    this.websocket = new WebSocket(this.config.server_url);
+                    
+                    this.websocket.onopen = () => {
+                        this.connected = true;
+                        updateStatus('connected', 'Connected (Fallback)');
+                        logMessage('✅', 'Connected to server');
+                        updateButtons();
+                        
+                        // Send authentication if needed
+                        if (this.config.auth) {
+                            this.authenticate();
+                        }
+                    };
+                    
+                    this.websocket.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            stats.received++;
+                            updateStats();
+                            logMessage('📥', `Received: ${message.message_type || message.type || 'unknown'}`, JSON.stringify(message, null, 2));
+                        } catch (e) {
+                            logMessage('❌', 'Failed to parse message: ' + event.data);
+                        }
+                    };
+                    
+                    this.websocket.onclose = (event) => {
+                        this.connected = false;
+                        updateStatus('disconnected', 'Disconnected');
+                        logMessage('❌', `Connection closed: ${event.code} ${event.reason}`);
+                        updateButtons();
+                    };
+                    
+                    this.websocket.onerror = (error) => {
+                        stats.errors++;
+                        updateStats();
+                        logMessage('❌', 'WebSocket error: ' + (error.message || 'Connection failed'));
+                    };
+                    
+                } catch (error) {
+                    updateStatus('disconnected', 'Connection Failed');
+                    logMessage('❌', 'Connection failed: ' + error.message);
+                    throw error;
+                }
+            }
+            
+            authenticate() {
+                const authMessage = {
+                    message_type: 'authenticate',
+                    data: this.config.auth,
+                    message_id: generateId(),
+                    timestamp: Date.now()
+                };
+                
+                this.sendMessage(authMessage);
+                logMessage('🔐', 'Authenticating...');
+            }
+            
+            sendMessage(message) {
+                if (!this.connected || !this.websocket) {
+                    throw new Error('Not connected');
+                }
+                
+                const json = JSON.stringify(message);
+                this.websocket.send(json);
+                stats.sent++;
+                updateStats();
+                logMessage('📤', `Sent: ${message.message_type}`, JSON.stringify(message, null, 2));
+            }
+            
+            disconnect() {
+                if (this.websocket) {
+                    this.websocket.close();
+                    this.websocket = null;
+                }
+                this.connected = false;
+            }
+        }
+        
+        // Helper functions
+        function generateId() {
+            return Math.random().toString(36).substring(2) + Date.now().toString(36);
+        }
+        
+        function updateStatus(status, text) {
+            elements.status.className = `status ${status}`;
+            elements.status.textContent = text;
+        }
+        
+        function updateButtons() {
+            const connected = client?.connected || false;
+            elements.connectBtn.disabled = connected;
+            elements.disconnectBtn.disabled = !connected;
+            elements.sendBtn.disabled = !connected;
+            elements.heartbeatBtn.disabled = !connected;
+            elements.serverInfoBtn.disabled = !connected;
+        }
+        
+        function updateStats() {
+            elements.sentCount.textContent = stats.sent;
+            elements.receivedCount.textContent = stats.received;
+            elements.errorCount.textContent = stats.errors;
+        }
+        
+        function logMessage(icon, message, details = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${icon} ${message}${details ? '\n' + details : ''}\n`;
+            elements.logArea.textContent += logEntry;
+            elements.logArea.scrollTop = elements.logArea.scrollHeight;
+        }
+        
+        function createConfig() {
+            const role = elements.clientRole.value;
+            const config = {
+                server_url: elements.serverUrl.value,
+                connect_timeout: 30000,
+                heartbeat_interval: 30000,
+                auth: null
+            };
+            
+            if (role !== 'guest') {
+                const token = elements.token.value.trim();
+                if (!token) {
+                    throw new Error('Token is required for non-guest roles');
+                }
+                config.auth = {
+                    type: 'token',
+                    token: token,
+                    role: role
+                };
+            }
+            
+            return config;
+        }
+        
+        // Event handlers
+        elements.connectBtn.addEventListener('click', async () => {
+            try {
+                const config = createConfig();
+                
+                if (wasmModule) {
+                    // Use WASM client
+                    try {
+                        const builder = new wasmModule.WasmBconClientBuilder(config.server_url);
+                        
+                        if (config.auth && config.auth.token) {
+                            builder.with_auth_token(config.auth.token, config.auth.role);
+                        }
+                        
+                        client = builder
+                            .with_timeout(config.connect_timeout)
+                            .with_heartbeat_interval(config.heartbeat_interval)
+                            .build();
+                            
+                        await client.connect();
+                        updateStatus('connected', 'Connected (WASM)');
+                        logMessage('✅', 'Connected using WASM client');
+                        updateButtons();
+                    } catch (wasmError) {
+                        logMessage('❌', 'WASM client failed: ' + wasmError);
+                        throw wasmError;
+                    }
+                } else {
+                    // Use fallback client
+                    client = new FallbackBconClient(config);
+                    await client.connect();
+                }
+            } catch (error) {
+                logMessage('❌', 'Connection failed: ' + error.message);
+                updateStatus('disconnected', 'Connection Failed');
+                stats.errors++;
+                updateStats();
+            }
+        });
+        
+        elements.disconnectBtn.addEventListener('click', () => {
+            if (client) {
+                client.disconnect();
+                client = null;
+                updateButtons();
+                logMessage('👋', 'Disconnected');
+            }
+        });
+        
+        elements.sendBtn.addEventListener('click', () => {
+            if (!client || (client.connected === false)) return;
+            
+            try {
+                const eventType = elements.eventType.value || 'custom_event';
+                const data = elements.messageData.value ? JSON.parse(elements.messageData.value) : {};
+                
+                if (wasmModule && client.send_js_message) {
+                    // WASM client
+                    const message = {
+                        message_type: eventType,
+                        data: data,
+                        message_id: generateId(),
+                        timestamp: Date.now()
+                    };
+                    
+                    client.send_js_message(JSON.stringify(message));
+                    stats.sent++;
+                    updateStats();
+                    logMessage('📤', `Sent: ${eventType}`, JSON.stringify(message, null, 2));
+                } else {
+                    // Fallback client
+                    const message = {
+                        message_type: eventType,
+                        data: data,
+                        message_id: generateId(),
+                        timestamp: Date.now()
+                    };
+                    
+                    client.sendMessage(message);
+                }
+            } catch (error) {
+                logMessage('❌', 'Failed to send message: ' + error.message);
+                stats.errors++;
+                updateStats();
+            }
+        });
+        
+        elements.heartbeatBtn.addEventListener('click', () => {
+            if (!client || (client.connected === false)) return;
+            
+            try {
+                if (wasmModule && client.send_js_message) {
+                    // WASM client
+                    const message = {
+                        message_type: 'heartbeat',
+                        data: {},
+                        message_id: generateId(),
+                        timestamp: Date.now()
+                    };
+                    
+                    client.send_js_message(JSON.stringify(message));
+                    stats.sent++;
+                    updateStats();
+                    logMessage('📤', 'Sent: heartbeat');
+                } else {
+                    // Fallback client
+                    const message = {
+                        message_type: 'heartbeat',
+                        data: {},
+                        message_id: generateId(),
+                        timestamp: Date.now()
+                    };
+                    
+                    client.sendMessage(message);
+                }
+            } catch (error) {
+                logMessage('❌', 'Failed to send heartbeat: ' + error.message);
+                stats.errors++;
+                updateStats();
+            }
+        });
+        
+        elements.serverInfoBtn.addEventListener('click', () => {
+            if (!client || (client.connected === false)) return;
+            
+            try {
+                if (wasmModule && client.send_js_message) {
+                    // WASM client
+                    const message = {
+                        message_type: 'get_server_info',
+                        data: {},
+                        message_id: generateId(),
+                        timestamp: Date.now()
+                    };
+                    
+                    client.send_js_message(JSON.stringify(message));
+                    stats.sent++;
+                    updateStats();
+                    logMessage('📤', 'Sent: get_server_info');
+                } else {
+                    // Fallback client  
+                    const message = {
+                        message_type: 'get_server_info',
+                        data: {},
+                        message_id: generateId(),
+                        timestamp: Date.now()
+                    };
+                    
+                    client.sendMessage(message);
+                }
+            } catch (error) {
+                logMessage('❌', 'Failed to request server info: ' + error.message);
+                stats.errors++;
+                updateStats();
+            }
+        });
+        
+        elements.clearLogBtn.addEventListener('click', () => {
+            elements.logArea.textContent = '';
+        });
+        
+        elements.exportLogBtn.addEventListener('click', () => {
+            const log = elements.logArea.textContent;
+            const blob = new Blob([log], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bcon-log-${new Date().toISOString().slice(0, 19)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+        
+        // Initialize the application
+        async function init() {
+            updateButtons();
+            updateStats();
+            logMessage('🚀', 'Bcon Client Web Example initialized');
+            
+            // Try to load WASM module
+            const wasmLoaded = await initWasm();
+            if (!wasmLoaded) {
+                logMessage('ℹ️', 'Using fallback WebSocket implementation. Build WASM for full functionality.');
+            }
+        }
+        
+        // Start the application
+        init().catch(error => {
+            logMessage('❌', 'Initialization failed: ' + error.message);
+            console.error('Init error:', error);
+        });
+    </script>
+</body>
+</html>
