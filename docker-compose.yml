@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # Bcon Server - WebSocket relay hub
+  bcon-server:
+    build:
+      context: ./bcon_server
+      dockerfile: Dockerfile
+    container_name: bcon-server
+    ports:
+      - "${BCON_CLIENT_PORT:-8081}:8081"
+      - "${BCON_ADAPTER_PORT:-8082}:8082"
+    environment:
+      - ADAPTER_SECRET=${ADAPTER_SECRET}
+      - CLIENT_SECRET=${CLIENT_SECRET}
+      - ADAPTER_PORT=8082
+      - CLIENT_PORT=8081
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./config/bcon-server.json:/app/config.json
+      - bcon-logs:/app/logs
+    networks:
+      - bcon-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Minecraft Server with Bcon Adapter
+  minecraft-server:
+    image: itzg/minecraft-server:java21
+    container_name: minecraft-server
+    ports:
+      - "${MINECRAFT_PORT:-25565}:25565"
+    environment:
+      # Server Configuration
+      - EULA=TRUE
+      - VERSION=${MINECRAFT_VERSION:-1.20.4}
+      - TYPE=PAPER
+      - MEMORY=${MINECRAFT_MEMORY:-4G}
+      - SERVER_NAME=${MINECRAFT_SERVER_NAME:-Bcon Demo Server}
+      
+      # Bcon Integration
+      - BCON_SERVER_URL=ws://bcon-server:8082
+      - BCON_ADAPTER_TOKEN=${MINECRAFT_ADAPTER_TOKEN}
+      - BCON_SERVER_ID=${MINECRAFT_SERVER_ID:-demo_server}
+      
+      # Modrinth Integration
+      - MODRINTH_PROJECTS=sh.cou.bcon
+      - MODRINTH_DOWNLOAD_DEPENDENCIES=required
+      
+      # Performance Settings
+      - USE_AIKAR_FLAGS=true
+      - INIT_MEMORY=${MINECRAFT_MEMORY:-4G}
+      - MAX_MEMORY=${MINECRAFT_MEMORY:-4G}
+      
+      # World Settings
+      - DIFFICULTY=${MINECRAFT_DIFFICULTY:-normal}
+      - MODE=${MINECRAFT_GAMEMODE:-survival}
+      - PVP=${MINECRAFT_PVP:-false}
+      - ONLINE_MODE=${MINECRAFT_ONLINE_MODE:-false}
+      - MAX_PLAYERS=${MINECRAFT_MAX_PLAYERS:-20}
+    volumes:
+      - minecraft-data:/data
+      - ./config/bcon-adapter.json:/data/plugins/bcon/config.json
+      - ./scripts/configure-bcon.sh:/configure-bcon.sh
+    networks:
+      - bcon-network
+    depends_on:
+      - bcon-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # System Client - Demonstrates event streaming
+  bcon-client:
+    build:
+      context: ./bcon_client
+      dockerfile: Dockerfile
+    container_name: bcon-system-client
+    environment:
+      - BCON_SERVER_URL=ws://bcon-server:8081
+      - SYSTEM_CLIENT_TOKEN=${SYSTEM_CLIENT_TOKEN}
+      - RUST_LOG=${LOG_LEVEL:-info}
+    networks:
+      - bcon-network
+    depends_on:
+      - bcon-server
+    restart: unless-stopped
+    command: ["bcon_client", "system", "--token", "${SYSTEM_CLIENT_TOKEN}"]
+
+  # Optional: BlueMap Web Interface
+  bluemap:
+    image: ghcr.io/bluemap-minecraft/bluemap:latest
+    container_name: bluemap
+    ports:
+      - "${BLUEMAP_PORT:-8100}:8100"
+    environment:
+      - BLUEMAP_CONFIG=/bluemap/config
+    volumes:
+      - minecraft-data:/data:ro
+      - bluemap-data:/bluemap
+      - ./config/bluemap:/bluemap/config
+    networks:
+      - bcon-network
+    depends_on:
+      - minecraft-server
+    restart: unless-stopped
+    profiles:
+      - bluemap
+
+  # Optional: Web Dashboard
+  bcon-dashboard:
+    build:
+      context: ./web-dashboard
+      dockerfile: Dockerfile
+    container_name: bcon-dashboard
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_BCON_SERVER_URL=ws://localhost:${BCON_CLIENT_PORT:-8081}
+      - BCON_SYSTEM_TOKEN=${SYSTEM_CLIENT_TOKEN}
+    networks:
+      - bcon-network
+    depends_on:
+      - bcon-server
+    restart: unless-stopped
+    profiles:
+      - dashboard
+
+volumes:
+  minecraft-data:
+    driver: local
+  bcon-logs:
+    driver: local
+  bluemap-data:
+    driver: local
+
+networks:
+  bcon-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,16 @@
+name: Bcon
+version: 1.0.0
+main: com.bcon.adapter.paper.PaperBconAdapter
+api-version: '1.21'
+authors: [Cou.sh]
+description: Bcon Adapter for Paper/Spigot servers
+website: https://github.com/your-org/bcon
+softdepend: [BlueMap]
+
+permissions:
+  bcon.admin:
+    description: Access to all Bcon commands
+    default: op
+  bcon.use:
+    description: Basic Bcon usage
+    default: true

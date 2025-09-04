@@ -1,0 +1,17 @@
+name: Bcon
+version: 1.0.0
+main: com.bcon.adapter.folia.FoliaBconAdapter
+api-version: '1.21'
+folia-supported: true
+authors: [Cou.sh]
+description: Bcon Adapter for Folia servers
+website: https://github.com/your-org/bcon
+softdepend: [BlueMap]
+
+permissions:
+  bcon.admin:
+    description: Access to all Bcon commands
+    default: op
+  bcon.use:
+    description: Basic Bcon usage
+    default: true

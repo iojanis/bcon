@@ -1,0 +1,24 @@
+{
+  "adapter_port": 8082,
+  "client_port": 8081,
+  "adapter_secret": "${ADAPTER_SECRET}",
+  "client_secret": "${CLIENT_SECRET}",
+  "rate_limits": {
+    "guest_requests_per_minute": 30,
+    "player_requests_per_minute": 120,
+    "admin_requests_per_minute": 300,
+    "system_requests_per_minute": 1000,
+    "unauthenticated_adapter_attempts_per_minute": 5,
+    "window_duration_seconds": 60,
+    "ban_threshold": 100,
+    "ban_duration_hours": 24
+  },
+  "heartbeat_interval_seconds": 30,
+  "connection_timeout_seconds": 300,
+  "log_level": "${LOG_LEVEL}",
+  "features": {
+    "enable_metrics": false,
+    "enable_debug_endpoints": false,
+    "enable_cors": true
+  }
+}

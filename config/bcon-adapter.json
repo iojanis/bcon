@@ -1,0 +1,24 @@
+{
+  "jwtToken": "${MINECRAFT_ADAPTER_TOKEN}",
+  "serverUrl": "ws://bcon-server:8082",
+  "serverId": "${MINECRAFT_SERVER_ID}",
+  "serverName": "${MINECRAFT_SERVER_NAME}",
+  "strictMode": false,
+  "reconnectDelayMs": 5000,
+  "enableBlueMap": true,
+  "heartbeatIntervalMs": 30000,
+  "connectionTimeoutMs": 10000,
+  "features": {
+    "enableEventStreaming": true,
+    "enableCommandExecution": true,
+    "enableDynamicCommands": true,
+    "enableBlueMapIntegration": true
+  },
+  "eventFilters": {
+    "enablePlayerEvents": true,
+    "enableServerEvents": true,
+    "enableWorldEvents": true,
+    "enableEntityEvents": true,
+    "enableInteractionEvents": true
+  }
+}
