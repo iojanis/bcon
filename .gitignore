@@ -7,6 +7,8 @@
 
 bcon_client/target
 bcon_server/target
+bcon_web/node_modules
 
 /.idea/
 /.claude/
+/bcon_web/

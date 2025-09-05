@@ -1,42 +1,44 @@
 {
   "schemaVersion": 1,
-  "id": "${modid}",
+  "id": "bcon",
   "version": "${version}",
-  "name": "${name}",
-  "description": "${description}",
-  "author": "${author}",
-  "license": "${license}",
-  "icon": "assets/template/icon.png",
+  "name": "Bcon Adapter",
+  "description": "Multi-platform Minecraft server adapter for real-time event streaming and dynamic command execution",
+  "authors": ["Cou.sh"],
+  "contributors": [],
   "contact": {
-    "homepage": "https://modrinth.com/mod/${modrinth}",
-    "issues": "https://dc.mutils.net"
+    "homepage": "https://modrinth.com/mod/bcon",
+    "sources": "https://github.com/your-org/bcon",
+    "issues": "https://github.com/your-org/bcon/issues"
   },
-  "environment": "${environment}",
+  "license": "MIT",
+  "icon": "assets/bcon/icon.png",
+  "environment": "*",
   "entrypoints": {
     "server": [
-      "de.miraculixx.template.server.TemplateServer"
-    ],
-    "client": [
-      "de.miraculixx.template.client.TemplateClient"
-    ],
-    "modmenu": [
-      "de.miraculixx.template.config.ModMenuIntegration"
+      "com.bcon.adapter.fabric.FabricBconAdapter"
     ]
   },
-  "mixins": [
-    "template.mixins.json"
-  ],
-  "suggests": {
-    "modmenu":"*"
-  },
   "depends": {
-    "fabricloader": ">=0.15.0",
-    "minecraft": "${mcversion}",
-    "java": ">=17",
-    "fabric-api": "*",
-    "fabric-language-kotlin": "*",
-
-    "cloth-config": "*",
-    "silk": "*"
+    "fabricloader": ">=0.16.0",
+    "minecraft": ">=1.21.0",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "bluemap": "*"
+  },
+  "mixins": [
+    "bcon.mixins.json"
+  ],
+  "custom": {
+    "modmenu": {
+      "badges": ["server"],
+      "parent": {
+        "id": "bcon",
+        "name": "Bcon Adapter",
+        "description": "WebSocket-based Minecraft server adapter"
+      }
+    }
   }
 }

@@ -18,7 +18,7 @@ path = "src/bin/main.rs"
 
 [features]
 default = ["native", "cli"]
-native = ["tokio", "tokio-tungstenite", "native-tls"]
+native = ["tokio", "tokio-tungstenite", "native-tls", "chrono"]
 wasm = ["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys", "gloo-net"]
 cli = ["clap", "tracing-subscriber"]
 
@@ -39,6 +39,7 @@ tokio-tungstenite = { version = "0.20", features = ["native-tls"], optional = tr
 native-tls = { version = "0.2", optional = true }
 clap = { version = "4.0", features = ["derive"], optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
 
 # WASM dependencies
 wasm-bindgen = { version = "0.2", optional = true }

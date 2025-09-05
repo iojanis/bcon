@@ -34,7 +34,7 @@ class BconWebSocketClient(
     private var lastPongReceived = System.currentTimeMillis()
     private var lastMessageReceived = System.currentTimeMillis() // Track any activity
     private var connectionAttempts = 0
-    private val maxConnectionAttempts = 5
+    private val maxConnectionAttempts = 100 // Much higher limit for persistent reconnection
     
     /**
      * Initialize the WebSocket connection
@@ -103,14 +103,20 @@ class BconWebSocketClient(
             webSocketInstance.sendText(jsonString, true).thenAccept {
                 logger.fine("Sent event: $eventType")
             }.exceptionally { throwable ->
-                logger.severe("Failed to send event '$eventType': ${throwable.message}")
-                // If send fails consistently, the connection monitor will detect it
+                logger.severe("⚠️  SEND EVENT FAILED: '$eventType' - ${throwable.message} - Connection lost, reconnecting immediately!")
+                // Force immediate reconnection when send fails
+                webSocket = null
+                connectionAttempts = 0
+                handleConnectionFailure()
                 null
             }
             
         } catch (e: Exception) {
-            logger.severe("Failed to send event '$eventType': ${e.message}")
-            // Connection might be broken - let monitor handle it
+            logger.severe("⚠️  SEND EVENT EXCEPTION: '$eventType' - ${e.message} - Connection lost, reconnecting immediately!")
+            // Force immediate reconnection when send throws exception
+            webSocket = null
+            connectionAttempts = 0
+            handleConnectionFailure()
         }
     }
     
@@ -172,13 +178,17 @@ class BconWebSocketClient(
             return
         }
         
-        // Exponential backoff: delay increases with each failed attempt
-        val baseDelay = config.reconnectDelay.toLong()
-        val exponentialDelay = baseDelay * (1 shl (connectionAttempts - 1).coerceAtMost(5)) // Cap at 2^5 = 32x
+        // Instant reconnection for the first few attempts, then gradual backoff
+        val delay = when {
+            connectionAttempts <= 5 -> 100L // Instant reconnection first 5 attempts (100ms)
+            connectionAttempts <= 15 -> 1000L // 1 second for next 10 attempts
+            connectionAttempts <= 30 -> 5000L // 5 seconds for next 15 attempts
+            else -> 15000L // 15 seconds for remaining attempts
+        }
         
-        logger.warning("Connection failed (attempt $connectionAttempts/$maxConnectionAttempts), retrying in ${exponentialDelay / 1000} seconds")
+        logger.warning("Connection failed (attempt $connectionAttempts/$maxConnectionAttempts), retrying in ${delay}ms")
         
-        CompletableFuture.delayedExecutor(exponentialDelay, TimeUnit.MILLISECONDS)
+        CompletableFuture.delayedExecutor(delay, TimeUnit.MILLISECONDS)
             .execute(::connectWebSocket)
     }
     
@@ -212,12 +222,18 @@ class BconWebSocketClient(
             webSocket?.sendPing(ByteBuffer.allocate(0))?.thenAccept { 
                 logger.fine("Heartbeat sent successfully")
             }?.exceptionally { throwable ->
-                logger.warning("Failed to send heartbeat: ${throwable.message}")
-                // Don't immediately fail - let the connection monitor handle it
+                logger.severe("⚠️  HEARTBEAT FAILED: ${throwable.message} - Connection lost, reconnecting immediately!")
+                // Force immediate reconnection when heartbeat fails
+                webSocket = null
+                connectionAttempts = 0
+                handleConnectionFailure()
                 null
             }
         } catch (e: Exception) {
-            logger.warning("Heartbeat error: ${e.message}")
+            logger.severe("⚠️  HEARTBEAT ERROR: ${e.message} - Connection lost, reconnecting immediately!")
+            webSocket = null
+            connectionAttempts = 0
+            handleConnectionFailure()
         }
     }
     
@@ -232,14 +248,14 @@ class BconWebSocketClient(
             }
         }
         
-        // Check connection health every 2 minutes (less aggressive monitoring)
+        // Check connection health every 30 seconds (more aggressive monitoring)
         connectionMonitor!!.scheduleWithFixedDelay({
             try {
                 checkConnectionHealth()
             } catch (e: Exception) {
                 logger.severe("Connection monitoring error: ${e.message}")
             }
-        }, 120000, 120000, TimeUnit.MILLISECONDS)
+        }, 30000, 30000, TimeUnit.MILLISECONDS)
         
         logger.info("Connection monitoring started")
     }
@@ -252,10 +268,10 @@ class BconWebSocketClient(
         val timeSinceLastMessage = now - lastMessageReceived
         val timeSinceLastPong = now - lastPongReceived
         
-        // Use a longer timeout - 5 minutes (300 seconds) without ANY activity
-        val activityTimeout = 300000L // 5 minutes
-        // Pong timeout can be more generous - 10 minutes  
-        val pongTimeout = 600000L // 10 minutes
+        // Shorter timeouts for faster detection - 2 minutes without activity
+        val activityTimeout = 120000L // 2 minutes
+        // Pong timeout - 3 minutes  
+        val pongTimeout = 180000L // 3 minutes
         
         // Check if we have recent message activity OR pong responses
         val hasRecentActivity = timeSinceLastMessage < activityTimeout
@@ -277,7 +293,7 @@ class BconWebSocketClient(
     // WebSocket.Listener implementation
     
     override fun onOpen(webSocket: WebSocket) {
-        logger.info("Connected to Bcon Server")
+        logger.info("✅ BCON CONNECTION ESTABLISHED - Server monitoring active!")
         this.webSocket = webSocket
         connectionAttempts = 0 // Reset connection attempts on successful connection
         val now = System.currentTimeMillis()
@@ -311,13 +327,19 @@ class BconWebSocketClient(
     }
     
     override fun onClose(webSocket: WebSocket, statusCode: Int, reason: String): CompletionStage<*>? {
-        logger.warning("WebSocket closed: $statusCode $reason")
+        logger.severe("⚠️  BCON CONNECTION LOST: $statusCode $reason - Attempting immediate reconnection!")
+        this.webSocket = null
+        // Force immediate reconnection attempt by resetting connection attempts
+        connectionAttempts = 0
         handleConnectionFailure()
         return null
     }
     
     override fun onError(webSocket: WebSocket, error: Throwable) {
-        logger.severe("WebSocket error: ${error.message}")
+        logger.severe("⚠️  BCON CONNECTION ERROR: ${error.message} - Attempting immediate reconnection!")
+        this.webSocket = null
+        // Force immediate reconnection attempt by resetting connection attempts
+        connectionAttempts = 0
         handleConnectionFailure()
     }
     

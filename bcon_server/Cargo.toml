@@ -60,6 +60,9 @@ url = "2.0"
 # Futures utilities
 futures-util = "0.3"
 
+# Binary protocol support for RCON
+byteorder = "1.4"
+
 # WASM-specific dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"

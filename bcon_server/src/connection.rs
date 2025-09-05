@@ -79,8 +79,8 @@ impl ConnectionManager {
         self.adapter_count.fetch_add(1, Ordering::Relaxed);
 
         info!(
-            "Adapter connected: {} (server: {})",
-            connection_id, validated_token.server_id
+            "Adapter connected: {}",
+            validated_token.server_id
         );
 
         // Spawn WebSocket handler
@@ -107,12 +107,17 @@ impl ConnectionManager {
         Ok(connection)
     }
 
-    pub async fn add_client_connection(
+    pub async fn add_client_connection<F, Fut>(
         &self,
         connection_id: String,
         validated_token: Option<ValidatedClientToken>,
         websocket: WebSocket,
-    ) -> Result<Arc<ClientConnection>, Box<dyn std::error::Error + Send + Sync>> {
+        message_handler: F,
+    ) -> Result<Arc<ClientConnection>, Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: Fn(String, ClientRole, IncomingMessage) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<(), anyhow::Error>> + Send,
+    {
         let (message_sender, mut message_receiver) = mpsc::unbounded_channel();
         
         let (user_id, username, role) = if let Some(token) = validated_token {
@@ -141,8 +146,8 @@ impl ConnectionManager {
         }
 
         info!(
-            "Client connected: {} (user: {:?}, role: {:?})",
-            connection_id, username, role
+            "Client connected: {} as {:?}",
+            username.as_deref().unwrap_or("guest"), role
         );
 
         // Spawn WebSocket handler
@@ -156,6 +161,7 @@ impl ConnectionManager {
                 websocket,
                 connection_clone,
                 &mut message_receiver,
+                message_handler,
             ).await {
                 error!("Client WebSocket error: {}", e);
             }
@@ -189,8 +195,6 @@ impl ConnectionManager {
                     match ws_msg {
                         Some(Ok(msg)) => {
                             if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-                                info!("ADAPTER_RAW: server={}, message={}", connection.server_id, text);
-                                
                                 // Parse incoming message
                                 match serde_json::from_str::<IncomingMessage>(&text) {
                                     Ok(incoming_message) => {
@@ -241,11 +245,16 @@ impl ConnectionManager {
         Ok(())
     }
 
-    async fn handle_client_websocket(
+    async fn handle_client_websocket<F, Fut>(
         mut websocket: WebSocket,
         connection: Arc<ClientConnection>,
         message_receiver: &mut mpsc::UnboundedReceiver<OutgoingMessage>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        message_handler: F,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: Fn(String, ClientRole, IncomingMessage) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = Result<(), anyhow::Error>> + Send,
+    {
         loop {
             tokio::select! {
                 // Handle incoming WebSocket messages
@@ -254,9 +263,22 @@ impl ConnectionManager {
                         Some(Ok(msg)) => {
                             if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
                                 debug!("Client {} received: {}", connection.connection_id, text);
-                                // Here you would parse and route the message to the message router
-                                // This is handled in the server implementation
+                                
+                                // Parse incoming message and route it
+                                match serde_json::from_str::<IncomingMessage>(&text) {
+                                    Ok(incoming_message) => {
+                                        // Route message through the handler
+                                        if let Err(e) = message_handler(connection.connection_id.clone(), connection.role.clone(), incoming_message).await {
+                                            error!("Failed to route client message: {}", e);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("Invalid JSON from client {} (role: {:?}): {} - Raw: {}", 
+                                            connection.connection_id, connection.role, e, text);
+                                    }
+                                }
                             } else if let tokio_tungstenite::tungstenite::Message::Close(_) = msg {
+                                info!("Client {} ({:?}) closed connection", connection.connection_id, connection.username);
                                 break;
                             }
                         }
@@ -401,6 +423,16 @@ impl ConnectionManager {
             if let Err(e) = client.message_sender.send(message.clone()) {
                 warn!("Failed to send message to system client {}: {}", client.connection_id, e);
             }
+        }
+    }
+
+    pub async fn send_to_client(&self, client_id: &str, message: OutgoingMessage) {
+        if let Some(client) = self.get_client(client_id) {
+            if let Err(e) = client.message_sender.send(message) {
+                warn!("Failed to send message to client {}: {}", client_id, e);
+            }
+        } else {
+            warn!("Client not found for ID: {}", client_id);
         }
     }
 

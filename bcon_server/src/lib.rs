@@ -1,20 +1,24 @@
 pub mod auth;
+pub mod command_tracker;
 pub mod config;
 pub mod connection;
 pub mod error;
 pub mod kv_store;
 pub mod message;
 pub mod rate_limiter;
+pub mod rcon_client;
 pub mod router;
 pub mod server;
 
 pub use auth::*;
+pub use command_tracker::*;
 pub use config::*;
 pub use connection::*;
 pub use error::*;
 pub use kv_store::*;
 pub use message::*;
 pub use rate_limiter::*;
+pub use rcon_client::*;
 pub use router::*;
 pub use server::*;
 
@@ -29,6 +33,8 @@ pub struct BconServer {
     rate_limiter: Arc<RateLimiter>,
     connection_manager: Arc<ConnectionManager>,
     message_router: Arc<MessageRouter>,
+    command_tracker: Arc<CommandTracker>,
+    rcon_manager: Arc<RconManager>,
 }
 
 impl BconServer {
@@ -46,9 +52,17 @@ impl BconServer {
         
         let connection_manager = Arc::new(ConnectionManager::new());
         
+        let mut command_tracker = CommandTracker::new();
+        command_tracker.start_timeout_checker();
+        let command_tracker = Arc::new(command_tracker);
+
+        let rcon_manager = Arc::new(RconManager::new());
+        
         let message_router = Arc::new(MessageRouter::new(
             Arc::clone(&connection_manager),
             Arc::clone(&kv_store),
+            Arc::clone(&command_tracker),
+            Arc::clone(&rcon_manager),
         ));
 
         Ok(Self {
@@ -58,6 +72,8 @@ impl BconServer {
             rate_limiter,
             connection_manager,
             message_router,
+            command_tracker,
+            rcon_manager,
         })
     }
 
@@ -100,6 +116,16 @@ impl BconServer {
             connection_errors: self.rate_limiter.get_error_count(),
             authentication_failures: self.auth_service.get_failure_count(),
         }
+    }
+
+    /// Get RCON manager for handling RCON connections
+    pub fn get_rcon_manager(&self) -> Arc<RconManager> {
+        Arc::clone(&self.rcon_manager)
+    }
+
+    /// Get message router for RCON integration
+    pub fn get_message_router(&self) -> Arc<MessageRouter> {
+        Arc::clone(&self.message_router)
     }
 }
 

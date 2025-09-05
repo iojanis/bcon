@@ -1,20 +1,26 @@
-# Bcon Server & Client
+# Bcon: Complete Minecraft Server Integration Platform
 
-A high-performance WebSocket communication system designed to bridge Minecraft servers with external applications, enabling real-time event streaming, command execution, and player interaction through web apps, Discord bots, and other services.
+A comprehensive, high-performance WebSocket communication system that bridges Minecraft servers with external applications. Bcon enables real-time event streaming, command execution, and player interaction through web apps, Discord bots, and other services across **Fabric**, **Paper**, and **Folia** server platforms.
 
 ## System Overview
 
-Bcon consists of two main components that work together:
+Bcon consists of three main components that work together:
 
 - **bcon_server**: WebSocket relay server that handles multiple Minecraft adapters and clients
-- **bcon_client**: Cross-platform client library for connecting to Bcon servers
+- **bcon_client**: Cross-platform client library for connecting to Bcon servers  
+- **bcon_adapter**: Multi-platform Minecraft mod/plugin that connects servers to the Bcon ecosystem
 
 ## Architecture
 
 ```
-[Minecraft Server + Plugin] ←--→ [Bcon Server] ←--→ [Web Apps/Clients]
-        (Adapter)                   (Relay Hub)        (System/Player Clients)
+[Fabric/Paper/Folia + Bcon Adapter] ←--→ [Bcon Server] ←--→ [Web Apps/Clients]
+        (Multi-Platform Adapter)            (Relay Hub)        (System/Player Clients)
 ```
+
+### Platform Support
+- **Fabric**: Full mod integration with Fabric API
+- **Paper**: Native Bukkit/Paper plugin support  
+- **Folia**: Thread-safe implementation for regionized servers
 
 ### Flow
 1. **Minecraft adapters** (plugins/mods) connect to the server and send game events
@@ -88,9 +94,31 @@ cd bcon_client
 ./target/release/bcon_client guest
 ```
 
-### 4. Set Up Minecraft Integration
+### 4. Install Bcon Adapter
 
-Configure your Minecraft server plugin/mod to connect to `ws://your-server:8082` with the adapter token in the Authorization header.
+Choose the appropriate adapter for your Minecraft server platform:
+
+#### Fabric Servers
+Download the Bcon Fabric mod from [Modrinth](https://modrinth.com/mod/bcon) and install it in your `mods/` folder.
+
+#### Paper/Spigot Servers  
+Download the Bcon Paper plugin from [Modrinth](https://modrinth.com/plugin/bcon) and install it in your `plugins/` folder.
+
+#### Folia Servers
+Use the Paper plugin - it automatically detects and supports Folia's regionized threading.
+
+### 5. Configure Minecraft Integration
+
+Edit the `plugins/bcon/config.json` file in your Minecraft server:
+
+```json
+{
+  "jwtToken": "your_adapter_token_here",
+  "serverUrl": "ws://your-bcon-server:8082",
+  "serverId": "your_server_id",
+  "serverName": "Your Server Display Name"
+}
+```
 
 ## Configuration
 

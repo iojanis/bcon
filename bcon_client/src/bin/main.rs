@@ -249,12 +249,15 @@ async fn run_client(mut config: BconConfig, auth: Option<AuthConfig>, interactiv
 }
 
 async fn run_interactive_mode(mut client: BconClient, role: ClientRole) -> Result<(), Box<dyn std::error::Error>> {
-    let handler = CliEventHandler { role: role.clone(), interactive: true };
-
-    // Start event loop in background
+    // For simplicity in interactive mode, we'll use a channel-based approach
+    // to avoid the complex deadlock situation with shared client state
+    
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<OutgoingMessage>();
     let client_clone = std::sync::Arc::new(tokio::sync::Mutex::new(client));
     let client_for_events = client_clone.clone();
 
+    // Start event loop in background
+    let handler = CliEventHandler { role: role.clone(), interactive: true };
     tokio::spawn(async move {
         let mut client_guard = client_for_events.lock().await;
         if let Err(e) = client_guard.start_event_loop(handler).await {
@@ -262,10 +265,26 @@ async fn run_interactive_mode(mut client: BconClient, role: ClientRole) -> Resul
         }
     });
 
+    // Start message sender in background
+    let client_for_sending = client_clone.clone();
+    tokio::spawn(async move {
+        while let Some(message) = rx.recv().await {
+            let mut client_guard = client_for_sending.lock().await;
+            if let Err(e) = client_guard.send_message(message).await {
+                eprintln!("Failed to send message: {}", e);
+            }
+            // Release lock immediately after sending
+            drop(client_guard);
+        }
+    });
+
     // Handle user input
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin);
     let mut line = String::new();
+
+    // Give the event loop a moment to start
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     loop {
         print!("> ");
@@ -290,6 +309,7 @@ async fn run_interactive_mode(mut client: BconClient, role: ClientRole) -> Resul
                 }
 
                 if input == "stats" {
+                    // Try to get stats safely
                     let client_guard = client_clone.lock().await;
                     let stats = client_guard.get_stats();
                     println!("📊 Statistics:");
@@ -297,12 +317,17 @@ async fn run_interactive_mode(mut client: BconClient, role: ClientRole) -> Resul
                     println!("   Received: {}", stats.received);
                     println!("   Errors: {}", stats.errors);
                     println!("   Reconnections: {}", stats.reconnections);
+                    drop(client_guard);
                     continue;
                 }
 
-                // Parse and send command
-                if let Err(e) = handle_user_input(&mut *client_clone.lock().await, input, &role).await {
-                    eprintln!("❌ Error: {}", e);
+                // Parse and send command via channel
+                if let Some(message) = create_message_from_input(input, &role).await {
+                    if let Err(_) = tx.send(message) {
+                        eprintln!("❌ Failed to queue message");
+                    } else {
+                        println!("✅ Command queued for sending");
+                    }
                 }
             }
             Err(e) => {
@@ -316,6 +341,94 @@ async fn run_interactive_mode(mut client: BconClient, role: ClientRole) -> Resul
     client_clone.lock().await.disconnect().await?;
     Ok(())
 }
+
+async fn create_message_from_input(input: &str, role: &ClientRole) -> Option<OutgoingMessage> {
+    let parts: Vec<&str> = input.splitn(2, ' ').collect();
+    let command = parts[0];
+    let args = parts.get(1).unwrap_or(&"").trim();
+
+    match command {
+        "heartbeat" | "ping" => {
+            Some(OutgoingMessage::heartbeat())
+        }
+        "info" => {
+            Some(OutgoingMessage::get_server_info())
+        }
+        "chat" if *role != ClientRole::Guest => {
+            if args.is_empty() {
+                println!("Usage: chat <message>");
+                return None;
+            }
+            Some(OutgoingMessage::chat_message(args.to_string(), None)
+                .with_timeout(30000).requires_acknowledgment())
+        }
+        "command" if matches!(role, ClientRole::Admin | ClientRole::System) => {
+            if args.is_empty() {
+                println!("Usage: command <command>");
+                return None;
+            }
+            Some(OutgoingMessage::execute_command(args.to_string(), None)
+                .with_timeout(30000).requires_acknowledgment())
+        }
+        "adapter" if *role == ClientRole::System => {
+            let adapter_parts: Vec<&str> = args.splitn(2, ' ').collect();
+            if adapter_parts.len() < 2 {
+                println!("Usage: adapter <command_type> <json_data>");
+                return None;
+            }
+
+            let command_type = adapter_parts[0].to_string();
+            match serde_json::from_str::<serde_json::Value>(adapter_parts[1]) {
+                Ok(data) => {
+                    Some(OutgoingMessage::adapter_command(None, command_type, data))
+                }
+                Err(e) => {
+                    println!("❌ Invalid JSON: {}", e);
+                    None
+                }
+            }
+        }
+        "rcon" if matches!(role, ClientRole::Admin | ClientRole::System) => {
+            if args.is_empty() {
+                println!("Usage: rcon <command>");
+                return None;
+            }
+            
+            Some(OutgoingMessage::new(
+                "rcon_command".to_string(),
+                serde_json::json!({
+                    "command": args,
+                    "server_id": null
+                })
+            ).with_timeout(30000).requires_acknowledgment())
+        }
+        "send" => {
+            let send_parts: Vec<&str> = args.splitn(2, ' ').collect();
+            if send_parts.len() < 2 {
+                println!("Usage: send <event_type> <json_data>");
+                return None;
+            }
+
+            let event_type = send_parts[0].to_string();
+            match serde_json::from_str::<serde_json::Value>(send_parts[1]) {
+                Ok(data) => {
+                    Some(OutgoingMessage::new(event_type, data)
+                        .with_timeout(30000).requires_acknowledgment())
+                }
+                Err(e) => {
+                    println!("❌ Invalid JSON: {}", e);
+                    None
+                }
+            }
+        }
+        _ => {
+            println!("❓ Unknown command: {}", command);
+            println!("   Type 'help' for available commands");
+            None
+        }
+    }
+}
+
 
 async fn handle_user_input(client: &mut BconClient, input: &str, role: &ClientRole) -> std::result::Result<(), BconError> {
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
@@ -336,16 +449,22 @@ async fn handle_user_input(client: &mut BconClient, input: &str, role: &ClientRo
                 println!("Usage: chat <message>");
                 return Ok(());
             }
-            client.send_chat(args.to_string(), None).await?;
-            println!("💬 Chat message sent");
+            
+            let chat_message = OutgoingMessage::chat_message(args.to_string(), None)
+                .with_timeout(30000).requires_acknowledgment();
+            client.send_message(chat_message).await?;
+            println!("💬 Chat message sent (requires system client to process)");
         }
         "command" if matches!(role, ClientRole::Admin | ClientRole::System) => {
             if args.is_empty() {
                 println!("Usage: command <command>");
                 return Ok(());
             }
-            client.execute_command(args.to_string(), None).await?;
-            println!("⚡ Command sent");
+            
+            let command_message = OutgoingMessage::execute_command(args.to_string(), None)
+                .with_timeout(30000).requires_acknowledgment();
+            client.send_message(command_message).await?;
+            println!("⚡ Command sent (requires system client to process)");
         }
         "adapter" if *role == ClientRole::System => {
             let adapter_parts: Vec<&str> = args.splitn(2, ' ').collect();
@@ -361,6 +480,23 @@ async fn handle_user_input(client: &mut BconClient, input: &str, role: &ClientRo
             client.send_adapter_command(None, command_type, data).await?;
             println!("🔌 Adapter command sent");
         }
+        "rcon" if matches!(role, ClientRole::Admin | ClientRole::System) => {
+            if args.is_empty() {
+                println!("Usage: rcon <command>");
+                return Ok(());
+            }
+            
+            let rcon_message = OutgoingMessage::new(
+                "rcon_command".to_string(),
+                serde_json::json!({
+                    "command": args,
+                    "server_id": null
+                })
+            ).with_timeout(30000).requires_acknowledgment();
+            
+            client.send_message(rcon_message).await?;
+            println!("🔧 RCON command sent (waiting for response...)");
+        }
         "send" => {
             let send_parts: Vec<&str> = args.splitn(2, ' ').collect();
             if send_parts.len() < 2 {
@@ -372,9 +508,10 @@ async fn handle_user_input(client: &mut BconClient, input: &str, role: &ClientRo
             let data: serde_json::Value = serde_json::from_str(send_parts[1])
                 .map_err(|e| BconError::MessageParsing(e.to_string()))?;
 
-            let message = OutgoingMessage::new(event_type, data);
+            let message = OutgoingMessage::new(event_type, data)
+                .with_timeout(30000).requires_acknowledgment();
             client.send_message(message).await?;
-            println!("📤 Message sent");
+            println!("📤 Message sent (with acknowledgment tracking)");
         }
         _ => {
             println!("❓ Unknown command: {}", command);
@@ -399,6 +536,7 @@ fn show_help(role: &ClientRole) {
 
     if matches!(role, ClientRole::Admin | ClientRole::System) {
         println!("   command <cmd> - Execute server command");
+        println!("   rcon <cmd>    - Execute RCON command");
     }
 
     if *role == ClientRole::System {

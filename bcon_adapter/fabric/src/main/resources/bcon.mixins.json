@@ -1,0 +1,35 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.bcon.adapter.fabric.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "bcon.refmap.json",
+  "mixins": [
+    "AbstractFurnaceBlockEntityMixin",
+    "FishingBobberEntityMixin",
+    "AnimalEntityMixin",
+    "PlayerEntityMixin",
+    "ServerPlayerEntityMixin",
+    "SimpleFabricMixins$ItemEntityMixin",
+    "SimpleFabricMixins$SimpleAnimalMixin",
+    "SimpleFabricMixins$SimpleServerPlayerMixin"
+  ],
+  "client": [],
+  "server": [
+    "AbstractFurnaceBlockEntityMixin",
+    "FishingBobberEntityMixin", 
+    "AnimalEntityMixin",
+    "PlayerEntityMixin",
+    "ServerPlayerEntityMixin",
+    "SimpleFabricMixins$ItemEntityMixin",
+    "SimpleFabricMixins$SimpleAnimalMixin",
+    "SimpleFabricMixins$SimpleServerPlayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "overwrites": {
+    "conformVisibility": true
+  },
+  "verbose": true
+}

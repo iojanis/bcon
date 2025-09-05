@@ -1,45 +1,55 @@
-import dex.plugins.outlet.v2.util.ReleaseType
-
 plugins {
-    `kotlin-script`
-    `fabric-script`
-    `adventure-script`
-    `publish-script`
+    id("fabric-loom") version "1.7.4"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
+
+val minecraftVersion = "1.21.1"
+val yarnMappings = "1.21.1+build.3"
+val fabricLoaderVersion = "0.16.5"
+val fabricApiVersion = "0.102.0+1.21.1"
 
 dependencies {
-    implementation(include(project(":core"))!!)
+    minecraft("com.mojang:minecraft:$minecraftVersion")
+    mappings("net.fabricmc:yarn:$yarnMappings:v2")
+    modImplementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
+    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+    
+    // Core module
+    implementation(project(":core"))
+    shadow(project(":core"))
 }
 
-modrinth {
-    uploadFile.set(tasks.remapJar)
-    outlet.mcVersionRange = properties["fabricSupportedVersions"] as String
-    outlet.allowedReleaseTypes = setOf(ReleaseType.RELEASE)
-    gameVersions.addAll(outlet.mcVersions())
-    loaders.addAll(buildList {
-        add("fabric")
-        add("quilt")
-    })
-    dependencies {
-        // The scope can be `required`, `optional`, `incompatible`, or `embedded`
-        // The type can either be `project` or `version`
-        required.project("fabric-api")
-        required.project("fabric-language-kotlin")
-
-        val useSilk = properties["useSilk"] as String == "true"
-        if (useSilk) {
-            required.project("silk")
-        }
-
-        val useConfig = properties["useConfig"] as String == "true"
-        if (useConfig) {
-            optional.project("cloth-config")
-        }
+tasks.processResources {
+    inputs.property("version", project.version)
+    
+    filesMatching("fabric.mod.json") {
+        expand("version" to project.version)
     }
 }
 
-sourceSets {
-    main {
-        resources.srcDirs("$rootDir/commons/")
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.jar {
+    archiveClassifier.set("")
+}
+
+tasks {
+    shadowJar {
+        archiveClassifier.set("dev")
+        configurations = listOf(project.configurations.shadow.get())
+    }
+    
+    remapJar {
+        dependsOn(shadowJar)
+        inputFile.set(shadowJar.get().archiveFile)
+        archiveClassifier.set("")
+    }
+    
+    build {
+        dependsOn(remapJar)
     }
 }

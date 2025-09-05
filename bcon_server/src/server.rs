@@ -95,14 +95,12 @@ impl AdapterServer {
         let token_ref = auth_token.clone();
         
         let websocket = tokio_tungstenite::accept_hdr_async(stream, move |req: &tokio_tungstenite::tungstenite::handshake::server::Request, res: tokio_tungstenite::tungstenite::handshake::server::Response| {
-            debug!("WebSocket handshake from {}", client_addr);
             
             // Extract Authorization header
             if let Some(auth_header) = req.headers().get("authorization") {
                 if let Ok(auth_str) = auth_header.to_str() {
                     if auth_str.starts_with("Bearer ") {
                         *token_ref.lock().unwrap() = Some(auth_str[7..].to_string());
-                        debug!("Authorization token extracted from header");
                     } else {
                         warn!("Invalid Authorization header format from {}", client_addr);
                     }
@@ -116,7 +114,6 @@ impl AdapterServer {
             Ok(res)
         }).await?;
         
-        debug!("WebSocket connection established from {}", client_addr);
 
         // Verify the extracted token
         let token = match auth_token.lock().unwrap().clone() {
@@ -157,10 +154,7 @@ impl AdapterServer {
             message_handler,
         ).await {
             Ok(_connection) => {
-                info!(
-                    "Adapter {} connected from {} (server: {})",
-                    connection_id, client_addr, validated_token.server_id
-                );
+                // Connection info already logged in ConnectionManager
             }
             Err(e) => {
                 error!("Failed to add adapter connection {}: {}", connection_id, e);
@@ -237,8 +231,6 @@ impl ClientServer {
 
         // Accept WebSocket connection
         let mut websocket = accept_async(stream).await?;
-        
-        debug!("Client WebSocket connection established from {}", client_addr);
 
         let connection_id = uuid::Uuid::new_v4().to_string();
         let mut authenticated_token: Option<ValidatedClientToken> = None;
@@ -276,13 +268,19 @@ impl ClientServer {
                                 
                                 // After successful auth, add connection to manager
                                 if authenticated_token.is_some() {
+                                    let message_router = Arc::clone(&message_router);
                                     match connection_manager.add_client_connection(
                                         connection_id.clone(),
                                         authenticated_token.clone(),
                                         websocket,
+                                        move |conn_id: String, role: crate::auth::ClientRole, message: IncomingMessage| {
+                                            let router = Arc::clone(&message_router);
+                                            async move {
+                                                router.route_client_message(conn_id, role, message).await
+                                            }
+                                        },
                                     ).await {
                                         Ok(_) => {
-                                            info!("Client {} connected from {}", connection_id, client_addr);
                                             return Ok(()); // Connection is now managed by ConnectionManager
                                         }
                                         Err(e) => {
@@ -357,7 +355,6 @@ impl ClientServer {
         connection_id: &str,
         websocket: &mut WebSocketStream<TcpStream>,
     ) -> Result<Option<ValidatedClientToken>> {
-        debug!("Processing client auth message");
 
         // Check if we can parse auth data from message
         if let Ok(auth_data) = serde_json::from_value::<serde_json::Value>(message.data.clone()) {

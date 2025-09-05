@@ -7,7 +7,12 @@ pub struct IncomingMessage {
     pub data: serde_json::Value,
     #[serde(rename = "messageId")]
     pub message_id: Option<String>,
+    #[serde(rename = "replyTo")]
+    pub reply_to: Option<String>,
     pub timestamp: Option<u64>,
+    #[serde(rename = "timeoutMs")]
+    pub timeout_ms: Option<u64>,
+    pub requires_ack: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +28,14 @@ pub struct OutgoingMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "messageId")]
     pub message_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "replyTo")]
+    pub reply_to: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "timeoutMs")]
+    pub timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires_ack: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,10 +83,13 @@ impl IncomingMessage {
             event_type,
             data,
             message_id: None,
+            reply_to: None,
             timestamp: Some(std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()),
+            timeout_ms: None,
+            requires_ack: None,
         }
     }
 
@@ -103,6 +119,9 @@ impl OutgoingMessage {
             success: None,
             error: None,
             message_id: None,
+            reply_to: None,
+            timeout_ms: None,
+            requires_ack: None,
         }
     }
 
@@ -117,6 +136,9 @@ impl OutgoingMessage {
             success: Some(true),
             error: None,
             message_id: None,
+            reply_to: None,
+            timeout_ms: None,
+            requires_ack: None,
         }
     }
 
@@ -131,12 +153,43 @@ impl OutgoingMessage {
             success: Some(false),
             error: Some(error),
             message_id: None,
+            reply_to: None,
+            timeout_ms: None,
+            requires_ack: None,
         }
     }
 
     pub fn with_message_id(mut self, message_id: String) -> Self {
         self.message_id = Some(message_id);
         self
+    }
+
+    pub fn with_reply_to(mut self, reply_to: String) -> Self {
+        self.reply_to = Some(reply_to);
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = Some(timeout_ms);
+        self.requires_ack = Some(true);
+        self
+    }
+
+    pub fn requires_acknowledgment(mut self) -> Self {
+        self.requires_ack = Some(true);
+        self
+    }
+
+    /// Create an acknowledgment response for a message
+    pub fn ack_success(reply_to: String, result_data: serde_json::Value) -> Self {
+        Self::success("command_result".to_string(), result_data)
+            .with_reply_to(reply_to)
+    }
+
+    /// Create an error acknowledgment response 
+    pub fn ack_error(reply_to: String, error: String) -> Self {
+        Self::error("command_result".to_string(), error)
+            .with_reply_to(reply_to)
     }
 
     pub fn auth_success(socket_id: String, connection_id: String, user: UserInfo) -> Self {

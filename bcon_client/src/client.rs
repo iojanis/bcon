@@ -166,12 +166,14 @@ impl BconClient {
     
     /// Send a message and wait for response
     pub async fn send_message_with_response(&mut self, message: OutgoingMessage) -> Result<IncomingMessage> {
-        let message_id = message.message_id.clone()
-            .ok_or_else(|| BconError::Configuration("Message must have an ID for response tracking".to_string()))?;
+        // Ensure message has an ID for tracking
+        if message.message_id.is_none() {
+            return Err(BconError::Configuration("Message must have an ID for response tracking".to_string()));
+        }
         
         // Set up response tracking
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        self.response_tracker.lock().unwrap().add_request(message_id, sender);
+        self.response_tracker.lock().unwrap().add_request(message.clone(), sender);
         
         // Send the message
         self.send_message(message).await?;

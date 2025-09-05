@@ -74,7 +74,7 @@ class EventManager(private val adapter: BconAdapter) {
         adapter.sendEvent("player_connection_init", data)
     }
     
-    fun onPlayerRespawned(oldPlayer: PlayerData, newPlayer: PlayerData, alive: Boolean) {
+    fun onPlayerRespawned(@Suppress("UNUSED_PARAMETER") oldPlayer: PlayerData, newPlayer: PlayerData, alive: Boolean) {
         val data = JsonObject().apply {
             addProperty("playerId", newPlayer.uuid)
             addProperty("playerName", newPlayer.name)
@@ -199,6 +199,286 @@ class EventManager(private val adapter: BconAdapter) {
         adapter.sendEvent("command_message", data)
     }
     
+    // Fishing Events
+    
+    fun onPlayerFishingCast(player: PlayerData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+            addProperty("inOpenWater", hook.inOpenWater)
+            addProperty("waitTime", hook.waitTime)
+        }
+        adapter.sendEvent("player_fishing_cast", data)
+    }
+    
+    fun onPlayerFishCaught(player: PlayerData, fish: EntityData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            add("fish", serializeEntity(fish))
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+            addProperty("inOpenWater", hook.inOpenWater)
+        }
+        adapter.sendEvent("player_fish_caught", data)
+    }
+    
+    fun onPlayerEntityHooked(player: PlayerData, entity: EntityData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            add("hookedEntity", serializeEntity(entity))
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+        }
+        adapter.sendEvent("player_entity_hooked", data)
+    }
+    
+    fun onPlayerFishingGrounded(player: PlayerData, location: Location, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            addProperty("groundX", location.x)
+            addProperty("groundY", location.y)
+            addProperty("groundZ", location.z)
+            addProperty("groundDimension", location.dimension)
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+        }
+        adapter.sendEvent("player_fishing_grounded", data)
+    }
+    
+    fun onPlayerFishEscape(player: PlayerData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+        }
+        adapter.sendEvent("player_fish_escape", data)
+    }
+    
+    fun onPlayerFishingReelIn(player: PlayerData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+        }
+        adapter.sendEvent("player_fishing_reel_in", data)
+    }
+    
+    fun onPlayerFishBite(player: PlayerData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+            addProperty("waitTime", hook.waitTime)
+        }
+        adapter.sendEvent("player_fish_bite", data)
+    }
+    
+    fun onPlayerFishLured(player: PlayerData, hook: FishHookData) {
+        val data = serializePlayer(player).apply {
+            addProperty("hookX", hook.location.x)
+            addProperty("hookY", hook.location.y)
+            addProperty("hookZ", hook.location.z)
+            addProperty("hookDimension", hook.location.dimension)
+            addProperty("inOpenWater", hook.inOpenWater)
+        }
+        adapter.sendEvent("player_fish_lured", data)
+    }
+    
+    fun onPlayerBucketEntity(player: PlayerData, entity: EntityData, bucket: ItemData) {
+        val data = serializePlayer(player).apply {
+            add("entity", serializeEntity(entity))
+            add("bucket", serializeItem(bucket))
+        }
+        adapter.sendEvent("player_bucket_entity", data)
+    }
+    
+    // Breeding Events
+    
+    fun onEntityStartBreeding(mother: EntityData, father: EntityData, breeder: PlayerData?, offspring: EntityData?) {
+        val data = JsonObject().apply {
+            add("mother", serializeEntity(mother))
+            add("father", serializeEntity(father))
+            breeder?.let { add("breeder", serializePlayer(it)) }
+            offspring?.let { add("offspring", serializeEntity(it)) }
+        }
+        adapter.sendEvent("entity_start_breeding", data)
+    }
+    
+    fun onEntityEnterLoveMode(entity: EntityData, cause: PlayerData?) {
+        val data = JsonObject().apply {
+            add("entity", serializeEntity(entity))
+            cause?.let { add("cause", serializePlayer(it)) }
+        }
+        adapter.sendEvent("entity_enter_love_mode", data)
+    }
+    
+    // Enhanced Entity Events
+    
+    fun onEntityDamage(entity: EntityData, damage: Double, damageType: String, damageSource: EntityData?) {
+        val data = JsonObject().apply {
+            add("entity", serializeEntity(entity))
+            addProperty("damage", damage)
+            addProperty("damageType", damageType)
+            damageSource?.let { add("damageSource", serializeEntity(it)) }
+        }
+        adapter.sendEvent("entity_damage", data)
+    }
+    
+    fun onEntityHeal(entity: EntityData, healAmount: Double, healReason: String) {
+        val data = JsonObject().apply {
+            add("entity", serializeEntity(entity))
+            addProperty("healAmount", healAmount)
+            addProperty("healReason", healReason)
+        }
+        adapter.sendEvent("entity_heal", data)
+    }
+    
+    fun onEntityMount(rider: EntityData, mount: EntityData) {
+        val data = JsonObject().apply {
+            add("rider", serializeEntity(rider))
+            add("mount", serializeEntity(mount))
+        }
+        adapter.sendEvent("entity_mount", data)
+    }
+    
+    fun onEntityDismount(rider: EntityData, mount: EntityData) {
+        val data = JsonObject().apply {
+            add("rider", serializeEntity(rider))
+            add("mount", serializeEntity(mount))
+        }
+        adapter.sendEvent("entity_dismount", data)
+    }
+    
+    // Furnace Events
+    
+    fun onFurnaceSmelt(location: Location, source: ItemData, result: ItemData) {
+        val data = JsonObject().apply {
+            addProperty("x", location.x)
+            addProperty("y", location.y)
+            addProperty("z", location.z)
+            addProperty("dimension", location.dimension)
+            add("source", serializeItem(source))
+            add("result", serializeItem(result))
+        }
+        adapter.sendEvent("furnace_smelt", data)
+    }
+    
+    fun onFurnaceBurn(location: Location, fuel: ItemData, burnTime: Int) {
+        val data = JsonObject().apply {
+            addProperty("x", location.x)
+            addProperty("y", location.y)
+            addProperty("z", location.z)
+            addProperty("dimension", location.dimension)
+            add("fuel", serializeItem(fuel))
+            addProperty("burnTime", burnTime)
+        }
+        adapter.sendEvent("furnace_burn", data)
+    }
+    
+    fun onFurnaceExtract(player: PlayerData, location: Location, item: ItemData, experience: Int) {
+        val data = serializePlayer(player).apply {
+            addProperty("furnaceX", location.x)
+            addProperty("furnaceY", location.y)
+            addProperty("furnaceZ", location.z)
+            addProperty("furnaceDimension", location.dimension)
+            add("item", serializeItem(item))
+            addProperty("experience", experience)
+        }
+        adapter.sendEvent("furnace_extract", data)
+    }
+    
+    fun onFurnaceStartSmelt(location: Location, source: ItemData, totalCookTime: Int) {
+        val data = JsonObject().apply {
+            addProperty("x", location.x)
+            addProperty("y", location.y)
+            addProperty("z", location.z)
+            addProperty("dimension", location.dimension)
+            add("source", serializeItem(source))
+            addProperty("totalCookTime", totalCookTime)
+        }
+        adapter.sendEvent("furnace_start_smelt", data)
+    }
+    
+    // Inventory Events
+    
+    fun onPlayerInventoryOpen(player: PlayerData, inventoryType: String, location: Location?) {
+        val data = serializePlayer(player).apply {
+            addProperty("inventoryType", inventoryType)
+            location?.let {
+                addProperty("inventoryX", it.x)
+                addProperty("inventoryY", it.y)
+                addProperty("inventoryZ", it.z)
+                addProperty("inventoryDimension", it.dimension)
+            }
+        }
+        adapter.sendEvent("player_inventory_open", data)
+    }
+    
+    fun onPlayerInventoryClose(player: PlayerData, inventoryType: String) {
+        val data = serializePlayer(player).apply {
+            addProperty("inventoryType", inventoryType)
+        }
+        adapter.sendEvent("player_inventory_close", data)
+    }
+    
+    fun onPlayerItemDrop(player: PlayerData, item: ItemData, location: Location) {
+        val data = serializePlayer(player).apply {
+            add("item", serializeItem(item))
+            addProperty("dropX", location.x)
+            addProperty("dropY", location.y)
+            addProperty("dropZ", location.z)
+            addProperty("dropDimension", location.dimension)
+        }
+        adapter.sendEvent("player_item_drop", data)
+    }
+    
+    fun onPlayerItemPickup(player: PlayerData, item: ItemData, location: Location) {
+        val data = serializePlayer(player).apply {
+            add("item", serializeItem(item))
+            addProperty("pickupX", location.x)
+            addProperty("pickupY", location.y)
+            addProperty("pickupZ", location.z)
+            addProperty("pickupDimension", location.dimension)
+        }
+        adapter.sendEvent("player_item_pickup", data)
+    }
+    
+    // Advanced Events (Version Dependent)
+    
+    fun onLootGenerate(location: Location, lootTable: String, items: List<ItemData>, entity: EntityData?) {
+        val data = JsonObject().apply {
+            addProperty("x", location.x)
+            addProperty("y", location.y)
+            addProperty("z", location.z)
+            addProperty("dimension", location.dimension)
+            addProperty("lootTable", lootTable)
+            val itemsArray = com.google.gson.JsonArray().apply {
+                items.forEach { add(serializeItem(it)) }
+            }
+            add("items", itemsArray)
+            entity?.let { add("entity", serializeEntity(it)) }
+        }
+        adapter.sendEvent("loot_generate", data)
+    }
+    
+    fun onPlayerInput(player: PlayerData, keys: Set<String>, inputType: String) {
+        val data = serializePlayer(player).apply {
+            val keysArray = com.google.gson.JsonArray().apply {
+                keys.forEach { add(it) }
+            }
+            add("keys", keysArray)
+            addProperty("inputType", inputType)
+        }
+        adapter.sendEvent("player_input", data)
+    }
+    
     // Serialization helpers
     
     private fun serializePlayer(player: PlayerData): JsonObject {
@@ -249,6 +529,21 @@ class EventManager(private val adapter: BconAdapter) {
             addProperty("dimension", block.location.dimension)
             addProperty("blockType", block.type)
             addProperty("blockData", block.data)
+        }
+    }
+    
+    private fun serializeItem(item: ItemData): JsonObject {
+        return JsonObject().apply {
+            addProperty("type", item.type)
+            addProperty("amount", item.amount)
+            item.displayName?.let { addProperty("displayName", it) }
+            item.lore?.let { 
+                val loreArray = it.toTypedArray()
+                add("lore", com.google.gson.JsonArray().apply {
+                    loreArray.forEach { loreItem -> add(loreItem) }
+                })
+            }
+            item.nbt?.let { addProperty("nbt", it) }
         }
     }
 }
@@ -306,4 +601,27 @@ data class Location(
     val dimension: String,
     val yaw: Float = 0f,
     val pitch: Float = 0f
+)
+
+data class ItemData(
+    val type: String,
+    val amount: Int,
+    val displayName: String? = null,
+    val lore: List<String>? = null,
+    val nbt: String? = null
+)
+
+data class FishHookData(
+    val location: Location,
+    val inOpenWater: Boolean,
+    val waitTime: Int
+)
+
+data class DamageSourceData(
+    val type: String,
+    val directEntity: EntityData?,
+    val causingEntity: EntityData?,
+    val isProjectile: Boolean = false,
+    val isMagic: Boolean = false,
+    val isExplosion: Boolean = false
 )

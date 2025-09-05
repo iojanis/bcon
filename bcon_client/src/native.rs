@@ -3,7 +3,7 @@ use crate::{BconConfig, BconError, Result, message::{IncomingMessage, OutgoingMe
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream, MaybeTlsStream};
 use tokio::net::TcpStream;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use std::time::Duration;
 
 pub struct NativeBconClient {

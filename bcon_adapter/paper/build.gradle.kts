@@ -1,38 +1,23 @@
-import dex.plugins.outlet.v2.util.ReleaseType
-
 plugins {
-    `kotlin-script`
-    `paper-script`
-    `shadow-script`
-    `publish-script`
-    id("io.github.dexman545.outlet")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 dependencies {
+    // Paper API - using newer stable version
+    compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
+    
+    // Core module  
     implementation(project(":core"))
 }
 
-sourceSets {
-    main {
-        resources.srcDirs("$rootDir/commons/")
+tasks {    
+    shadowJar {
+        archiveClassifier.set("")
+        // Basic shadow jar without complex transformations to avoid ASM Java 21 issues
+    }
+    
+    build {
+        dependsOn(shadowJar)
     }
 }
 
-modrinth {
-    uploadFile.set(tasks.jar)
-    outlet.mcVersionRange = properties["paperSupportedVersions"] as String
-    outlet.allowedReleaseTypes = setOf(ReleaseType.RELEASE)
-    gameVersions.addAll(outlet.mcVersions())
-    loaders.addAll(buildList {
-        add("paper")
-        add("purpur")
-
-        val foliaSupport = properties["foliaSupport"] as String == "true"
-        if (foliaSupport) add("folia")
-    })
-    dependencies {
-        // The scope can be `required`, `optional`, `incompatible`, or `embedded`
-        // The type can either be `project` or `version`
-        required.project("fabric-api")
-    }
-}
